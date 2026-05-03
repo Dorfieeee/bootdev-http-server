@@ -5,6 +5,7 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"slices"
 	"sync/atomic"
 
 	"github.com/Dorfieeee/bootdev-http-server/internal/database"
@@ -19,12 +20,20 @@ type apiConfig struct {
 	fileserverHits atomic.Int32
 	db             *database.Queries
 	platform       string
+	appSecret      string
 }
 
 func main() {
 	godotenv.Load()
 
 	dbURL := os.Getenv("DB_URL")
+	appSecret := os.Getenv("APP_SECRET")
+	platform := os.Getenv("PLATFORM")
+
+	if slices.Contains([]string{dbURL, appSecret, platform}, "") {
+		log.Fatal("Env variables are not set")
+	}
+
 	db, err := sql.Open("postgres", dbURL)
 	if err != nil {
 		log.Fatalf("Unable to open db connection: %v\n", err.Error())
@@ -32,8 +41,9 @@ func main() {
 	dbQueries := database.New(db)
 
 	cfg := apiConfig{
-		db:       dbQueries,
-		platform: os.Getenv("PLATFORM"),
+		db:        dbQueries,
+		platform:  platform,
+		appSecret: appSecret,
 	}
 
 	mux := http.NewServeMux()

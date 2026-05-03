@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/Dorfieeee/bootdev-http-server/internal/auth"
 	"github.com/Dorfieeee/bootdev-http-server/internal/database"
 	"github.com/google/uuid"
 )
@@ -19,8 +20,19 @@ type Chirp struct {
 
 func (cfg *apiConfig) createChirpHandler(w http.ResponseWriter, r *http.Request) {
 	type createChirpParams struct {
-		Body   string    `json:"body"`
-		UserID uuid.UUID `json:"user_id"`
+		Body string `json:"body"`
+	}
+
+	JWTToken, err := auth.GetBearerToken(r.Header)
+	if err != nil {
+		respondWithError(w, http.StatusBadRequest, err.Error(), err)
+		return
+	}
+
+	userID, err := auth.ValidateJWT(JWTToken, cfg.appSecret)
+	if err != nil {
+		respondWithError(w, http.StatusUnauthorized, http.StatusText(http.StatusUnauthorized), err)
+		return
 	}
 
 	decoder := json.NewDecoder(r.Body)
@@ -37,10 +49,10 @@ func (cfg *apiConfig) createChirpHandler(w http.ResponseWriter, r *http.Request)
 
 	chirp, err := cfg.db.CreateChirp(r.Context(), database.CreateChirpParams{
 		Body:   params.Body,
-		UserID: params.UserID,
+		UserID: userID,
 	})
 	if err != nil {
-		respondWithError(w, http.StatusInternalServerError, "Unable to create chirt record", err)
+		respondWithError(w, http.StatusInternalServerError, "Unable to create chirp record", err)
 		return
 	}
 

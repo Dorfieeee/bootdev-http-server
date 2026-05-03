@@ -3,16 +3,19 @@ package main
 import (
 	"encoding/json"
 	"net/http"
+	"time"
 
 	"github.com/Dorfieeee/bootdev-http-server/internal/auth"
 )
 
 func (cfg *apiConfig) loginHandler(w http.ResponseWriter, r *http.Request) {
 	type loginReqParams struct {
-		Password string `json:"password"`
-		Email    string `json:"email"`
+		Password         string `json:"password"`
+		Email            string `json:"email"`
+		ExpiresInSeconds *int   `json:"expires_in_seconds"`
 	}
 
+	defaultTokenDuration := time.Duration(time.Hour)
 	decoder := json.NewDecoder(r.Body)
 	var params loginReqParams
 	if err := decoder.Decode(&params); err != nil {
@@ -37,10 +40,32 @@ func (cfg *apiConfig) loginHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	respondWithJSON(w, http.StatusOK, User{
-		ID:        user.ID,
-		CreatedAt: user.CreatedAt,
-		UpdatedAt: user.CreatedAt,
-		Email:     user.Email,
+	expiresIn := defaultTokenDuration
+	if params.ExpiresInSeconds != nil {
+		userDefinedDuration := time.Duration(*params.ExpiresInSeconds) * time.Second
+		if userDefinedDuration < defaultTokenDuration {
+			expiresIn = userDefinedDuration
+		}
+	}
+
+	JWTToken, err := auth.MakeJWT(user.ID, cfg.appSecret, expiresIn)
+	if err != nil {
+		respondWithError(w, http.StatusInternalServerError, "Could not create token", err)
+		return
+	}
+
+	type loginResponse struct {
+		User
+		Token string `json:"token"`
+	}
+
+	respondWithJSON(w, http.StatusOK, loginResponse{
+		User: User{
+			ID:        user.ID,
+			CreatedAt: user.CreatedAt,
+			UpdatedAt: user.CreatedAt,
+			Email:     user.Email,
+		},
+		Token: JWTToken,
 	})
 }
