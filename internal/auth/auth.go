@@ -1,6 +1,8 @@
 package auth
 
 import (
+	"crypto/rand"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"net/http"
@@ -43,7 +45,7 @@ func ValidateJWT(tokenString, tokenSecret string) (uuid.UUID, error) {
 	token, err := jwt.ParseWithClaims(
 		tokenString,
 		&claimsStruct,
-		func(token *jwt.Token) (interface{}, error) { return []byte(tokenSecret), nil },
+		func(token *jwt.Token) (any, error) { return []byte(tokenSecret), nil },
 	)
 	if err != nil {
 		return uuid.Nil, err
@@ -82,4 +84,10 @@ func GetBearerToken(headers http.Header) (string, error) {
 		return "", fmt.Errorf("Missing JWT token")
 	}
 	return tokenString, nil
+}
+
+func MakeResfreshToken() string {
+	randomBytes := make([]byte, 32)
+	rand.Read(randomBytes)
+	return hex.EncodeToString(randomBytes)
 }

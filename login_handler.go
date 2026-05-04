@@ -6,16 +6,15 @@ import (
 	"time"
 
 	"github.com/Dorfieeee/bootdev-http-server/internal/auth"
+	"github.com/Dorfieeee/bootdev-http-server/internal/database"
 )
 
 func (cfg *apiConfig) loginHandler(w http.ResponseWriter, r *http.Request) {
 	type loginReqParams struct {
-		Password         string `json:"password"`
-		Email            string `json:"email"`
-		ExpiresInSeconds *int   `json:"expires_in_seconds"`
+		Password string `json:"password"`
+		Email    string `json:"email"`
 	}
 
-	defaultTokenDuration := time.Duration(time.Hour)
 	decoder := json.NewDecoder(r.Body)
 	var params loginReqParams
 	if err := decoder.Decode(&params); err != nil {
@@ -40,23 +39,28 @@ func (cfg *apiConfig) loginHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	expiresIn := defaultTokenDuration
-	if params.ExpiresInSeconds != nil {
-		userDefinedDuration := time.Duration(*params.ExpiresInSeconds) * time.Second
-		if userDefinedDuration < defaultTokenDuration {
-			expiresIn = userDefinedDuration
-		}
-	}
-
+	expiresIn := time.Duration(time.Hour)
 	JWTToken, err := auth.MakeJWT(user.ID, cfg.appSecret, expiresIn)
 	if err != nil {
-		respondWithError(w, http.StatusInternalServerError, "Could not create token", err)
+		respondWithError(w, http.StatusInternalServerError, "Failed to create access token", err)
+		return
+	}
+
+	dbRefreshToken, err := cfg.db.CreateRefreshToken(r.Context(), database.CreateRefreshTokenParams{
+		Token:     auth.MakeResfreshToken(),
+		ExpiresAt: time.Now().Add(time.Duration(time.Hour) * 24 * 60),
+		UserID:    user.ID,
+	})
+
+	if err != nil {
+		respondWithError(w, http.StatusInternalServerError, "Failed to create refresh token", err)
 		return
 	}
 
 	type loginResponse struct {
 		User
-		Token string `json:"token"`
+		AccessToken  string `json:"token"`
+		RefreshToken string `json:"refresh_token"`
 	}
 
 	respondWithJSON(w, http.StatusOK, loginResponse{
@@ -66,6 +70,7 @@ func (cfg *apiConfig) loginHandler(w http.ResponseWriter, r *http.Request) {
 			UpdatedAt: user.CreatedAt,
 			Email:     user.Email,
 		},
-		Token: JWTToken,
+		AccessToken:  JWTToken,
+		RefreshToken: dbRefreshToken.Token,
 	})
 }

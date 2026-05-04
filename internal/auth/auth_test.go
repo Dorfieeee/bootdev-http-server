@@ -195,3 +195,10 @@ func TestGetBearerToken(t *testing.T) {
 		})
 	}
 }
+
+func TestMakeRefreshToken(t *testing.T) {
+	token := MakeResfreshToken()
+	if len(token) != 64 {
+		t.Errorf("Expected token to be 64 characters long, gotToken = %v, gotLength = %v", token, len(token))
+	}
+}
